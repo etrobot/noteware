@@ -1,29 +1,37 @@
 import os
+from typing_extensions import TypedDict
+from langgraph.graph import StateGraph
 
-from llama_index.core.agent import ReActAgent
-from llama_index.core.llms import ChatMessage
-from llama_index.core.tools import BaseTool, FunctionTool
-from llama_index.llms.openai_like import OpenAILike
-
-from dotenv import load_dotenv, find_dotenv
+from dotenv import load_dotenv,find_dotenv
 load_dotenv(find_dotenv())
-
-def multiply(a: int, b: int) -> int:
-    """Multiply two integers and returns the result integer"""
-    return a * b
-multiply_tool = FunctionTool.from_defaults(fn=multiply)
-
-def add(a: int, b: int) -> int:
-    """Add two integers and returns the result integer"""
-    return a + b
-add_tool = FunctionTool.from_defaults(fn=add)
 
 api_key = os.environ["LLM_API_KEY"]
 api_base = os.environ["LLM_API_BASE"]
 model_small=os.environ['LLM_BAK_MODEL']
+class GraphState(TypedDict):
+    flag : str
+    generation : str
 
-llm = OpenAILike(is_chat_model=True, model="THUDM/glm-4-9b-chat", api_base=api_base, api_key=api_key)
+initial_prompt = 'hello'
+def start_node(state:GraphState):
+    return {"generation": initial_prompt, "flag": "start"}
 
-agent = ReActAgent.from_tools([multiply_tool, add_tool], llm=llm, verbose=True)
+def process_node(state: GraphState):
+    return {"generation": state["generation"], "flag": "process"}
 
-response = agent.chat("What is 20+(2*4)? Calculate step by step ")
+def end_node(state: GraphState):
+    return {"generation": state["generation"], "flag": "end"}
+
+workflow = StateGraph(GraphState)
+
+workflow.add_node("start", start_node)  # generation solution
+workflow.add_node("process", process_node)  # check code
+workflow.add_node("end", end_node)  # reflect
+
+workflow.set_entry_point("start")
+workflow.add_edge("start", "process")
+workflow.add_edge("process", "end")
+
+app = workflow.compile()
+final_state = app.invoke({"flag": "start", "generation": concatenated_content})
+print(final_state)
