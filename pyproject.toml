@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "noteware"
+version = "0.1.0"
+description = ""
+authors = ["etrobot@outlook.com <etrobot@outlook.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+langgraph = "^0.2.14"
+python-dotenv = "^1.0.1"
+langchain-openai = "^0.1.23"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

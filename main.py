@@ -1,7 +1,9 @@
 import os
+import re
+import requests
 from typing_extensions import TypedDict
 from langgraph.graph import StateGraph
-
+from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv,find_dotenv
 load_dotenv(find_dotenv())
 
@@ -12,12 +14,23 @@ class GraphState(TypedDict):
     flag : str
     generation : str
 
-initial_prompt = 'hello'
+
+def llmSummarize(text: str) -> str:
+    llm = ChatOpenAI(model=model_small, api_key=api_key, base_url=api_base)
+    content = text+'\n summarize and output keypoints with index.'
+    result = llm.invoke(content).content
+    return result
+
 def start_node(state:GraphState):
-    return {"generation": initial_prompt, "flag": "start"}
+    image_extensions = r'\.(jpg|jpeg|png|gif|bmp|svg|webp)$'
+    if re.search(image_extensions, state["generation"], re.IGNORECASE):
+        raise ValueError("Not a valid link")
+    content = requests.get('https://r.jina.ai/'+state["generation"], headers={'User-Agent': 'Mozilla/5.0'}).text
+    return {"generation": content, "flag": "start"}
 
 def process_node(state: GraphState):
-    return {"generation": state["generation"], "flag": "process"}
+    result = llmSummarize(state["generation"])
+    return {"generation": result, "flag": "process"}
 
 def end_node(state: GraphState):
     return {"generation": state["generation"], "flag": "end"}
@@ -33,5 +46,6 @@ workflow.add_edge("start", "process")
 workflow.add_edge("process", "end")
 
 app = workflow.compile()
-final_state = app.invoke({"flag": "start", "generation": concatenated_content})
+user_input = input("URL: ")
+final_state = app.invoke({"flag": "start", "generation": user_input})
 print(final_state)
