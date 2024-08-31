@@ -10,6 +10,8 @@ python = "^3.10"
 langgraph = "^0.2.14"
 python-dotenv = "^1.0.1"
 langchain-openai = "^0.1.23"
+duckduckgo-search = "^6.2.11"
+notion-client = "^2.2.1"
 
 
 [build-system]
