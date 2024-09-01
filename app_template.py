@@ -12,7 +12,7 @@ class tools():
         self.llm = ChatOpenAI(model=os.getenv("MODEL"), api_key=os.getenv("LLM_KEY"), base_url=os.getenv("LLM_BASE"))
 
     def extract_and_replace_links(self,text:str)->dict:
-        url_pattern = r'(https?://[^\s]+|www\.[^\s]+)'
+        url_pattern = r'(https?://[^\s,]+|www\.[^\s,]+)'
         links = re.findall(url_pattern, text)
         for i, link in enumerate(links):
             text = text.replace(link, f'[link{i + 1}]')
@@ -25,10 +25,10 @@ class tools():
         return content
 
     def serp(self,text:str) -> list:
-        with DDGS(proxy="socks5://127.0.0.1:7890") as ddgs:
+        with DDGS() as ddgs:
             return ddgs.text(text, max_results=5)
 
-    def summarize(self,text: str,prompt='summarize and output keypoints with index.') -> str:
+    def LLMprocess(self,text: str,prompt='TLDR;') -> str:
         content = text + '\n'+ prompt
         result = self.llm.invoke(content).content
         return result
@@ -48,11 +48,12 @@ def run(user_input:str,tools:tools) -> str:
         return {"generation": generation, "next": "process", "mission": etracted['text']}
 
     def process_node(state: GraphState):
-        result = tools.summarize(state["generation"])
+        prompt = 'summarize and output keypoints with index.'
+        result = tools.LLMprocess(state["generation"],prompt)
         return {"generation": result, "next": "think", "mission": state["mission"]}
 
     def think_node(state: GraphState):
-        # this node is a conditional node that will return different states
+        # this node is a conditional node that will return different states, but it's not neccessary if the mission has no switch case
         think_result = tools.llm.invoke('data:' + state["generation"] + 'mission:' + state[
             "mission"] + "\nThink: if the data can fit the mission, output 'yes', otherwise make new keyworks output begin with 'Should search with:'.").content
         if 'Should search with:' not in think_result:
@@ -78,6 +79,6 @@ def run(user_input:str,tools:tools) -> str:
     app = workflow.compile()
     final_state = app.invoke({"next": "entry", "mission": user_input},{"recursion_limit": 10}, debug=True)
     NotionMarkdownManager(os.getenv("NOTION_TOKEN"), os.getenv("NOTION_DB_ID")).insert_markdown_to_notion(
-        final_state["generation"], user_input)
+        final_state["generation"])
 
 run(input("misson: "),tools())# change input to directly pass a mission

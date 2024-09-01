@@ -47,7 +47,7 @@ def read_and_execute_app():
         new_app = llm.invoke(f'<app_template>{app_content}</app_template>\n <Instruction>{notion_content}</Instruction> follow the template to convert the workflow into a langgraph app, replace user input with mission as initial parameter. Only output the final python code').content
         logger.info(new_app)
     except Exception as e:
-        logger.error(f"Error reading app_template.py: {e}")
+        logger.error(f"Error: {e}")
         return
 
     try:
