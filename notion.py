@@ -1,204 +1,115 @@
-from notion_client import Client
 import re
+from notion_client import Client
+import questionary
+
 class NotionMarkdownManager:
     def __init__(self, api_key, database_id):
         self.notion = Client(auth=api_key)
         self.database_id = database_id
 
-    def markdown_to_notion_blocks(self, md_text):
-        def create_heading_1(text):
-            return {
-                "object": "block",
-                "type": "heading_1",
-                "heading_1": {
-                    "rich_text": parse_text_formatting(text)
-                }
-            }
-
-        def create_heading_2(text):
-            return {
-                "object": "block",
-                "type": "heading_2",
-                "heading_2": {
-                    "rich_text": parse_text_formatting(text)
-                }
-            }
-
-        def create_heading_3(text):
-            return {
-                "object": "block",
-                "type": "heading_3",
-                "heading_3": {
-                    "rich_text": parse_text_formatting(text)
-                }
-            }
-
-        def create_bulleted_list_item(text):
-            return {
-                "object": "block",
-                "type": "bulleted_list_item",
-                "bulleted_list_item": {
-                    "rich_text": parse_text_formatting(text)
-                }
-            }
-
-        def create_numbered_list_item(text):
-            return {
-                "object": "block",
-                "type": "numbered_list_item",
-                "numbered_list_item": {
-                    "rich_text": parse_text_formatting(text)
-                }
-            }
-
-        def create_quote(text):
-            return {
-                "object": "block",
-                "type": "quote",
-                "quote": {
-                    "rich_text": parse_text_formatting(text)
-                }
-            }
-
-        def create_paragraph(text):
-            return {
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {
-                    "rich_text": parse_text_formatting(text)
-                }
-            }
-
-        def create_link(text, href):
-            return {
-                "type": "text",
-                "text": {
-                    "content": text,
-                    "link": {"url": href}
-                }
-            }
-
-        def parse_text_formatting(text):
-            # 处理加粗、链接和普通文本
-            rich_text = []
-
-            bold_pattern = r'\*\*([^\*]+)\*\*'
-            link_pattern = r'\[([^\]]+)\]\((http[^\)]+)\)'
-
-            # 先查找所有加粗文本和链接
-            cursor = 0
-            for match in re.finditer(f'{bold_pattern}|{link_pattern}', text):
-                start, end = match.span()
-
-                # 添加非格式化文本
-                if cursor < start:
-                    rich_text.append({"type": "text", "text": {"content": text[cursor:start]}})
-
-                # 添加加粗文本
-                if match.group(1):
-                    rich_text.append(
-                        {"type": "text", "text": {"content": match.group(1), "annotations": {"bold": True}}})
-
-                # 添加链接文本
-                if match.group(2):
-                    rich_text.append(create_link(match.group(2), match.group(3)))
-
-                cursor = end
-
-            # 添加最后的普通文本
-            if cursor < len(text):
-                rich_text.append({"type": "text", "text": {"content": text[cursor:]}})
-
-            return rich_text
-
-        blocks = []
-        lines = md_text.split("\n")
-
-        for line in lines:
-            if len(line) == 0:
-                continue
-            if line.startswith("# "):
-                blocks.append(create_heading_1(line[2:]))
-            elif line.startswith("## "):
-                blocks.append(create_heading_2(line[3:]))
-            elif line.startswith("### "):
-                blocks.append(create_heading_3(line[4:]))
-            elif line.startswith("- "):
-                blocks.append(create_bulleted_list_item(line[2:]))
-            elif line.startswith("1. "):
-                blocks.append(create_numbered_list_item(line[3:]))
-            elif line.startswith("> "):
-                blocks.append(create_quote(line[2:]))
-            else:
-                blocks.append(create_paragraph(line))
-        return blocks
-
-    def insert_markdown_to_notion(self, md_text,title=None):
-        blocks = []
-        if len(md_text) > 100:
-            blocks = self.markdown_to_notion_blocks(md_text)
-        if title is None:
-            title = md_text[:60]
-            if len(blocks) > 0:
-                title = blocks[0]['heading_1']['rich_text'][0]['text']['content']
-        response = self.notion.pages.create(
-            parent={"database_id": self.database_id},
-            properties={
-                "Name": {
-                    "title": [
-                        {
-                            "text": {
-                                "content": title
-                            }
-                        }
-                    ]
-                },
-                "Status": {
+    def list_template_articles(self):
+        response = self.notion.databases.query(
+            **{
+                "database_id": self.database_id,
+                "filter": {
+                    "property": "Status",
                     "status": {
-                        "name": "draft"
+                        "equals": "Misson"
                     }
                 }
-            },
-            children=blocks
-        )
-        return response['id']
-
-    def update_notion_by_id(self, page_id, md_text):
-        page = self.notion.pages.retrieve(page_id=page_id)
-        blocks = self.markdown_to_notion_blocks(md_text)
-        print(blocks)
-        response = self.notion.pages.update(
-            page_id=page_id,
-            properties={
-                "Name": {
-                    "title": [
-                        {
-                            "text": {
-                                "content": page['properties']['Name']['title'][0]['text']['content']
-                            }
-                        }
-                    ]
-                }
             }
         )
-        self.notion.blocks.children.append(block_id=page_id, children=blocks)
-        return response
+        articles = response.get('results', [])
+        return articles
 
-    def read_article_markdown_by_id(self, page_id):
-        blocks = []
-        block_children = self.notion.blocks.children.list(block_id=page_id)
-        blocks.extend(block_children['results'])
+    def display_article_menu(self, articles):
+        # Create a list of article titles with their corresponding IDs
+        choices = [
+            {"name": article["properties"]["Name"]["title"][0]["text"]["content"], "value": article["id"]}
+            for article in articles
+        ]
 
-        content = []
+        # Create a selection menu using questionary
+        answer = questionary.select(
+            "Select an article to read:",
+            choices=[choice["name"] for choice in choices]
+        ).ask()
 
-        for block in blocks:
-            block_type = block['type']
-            if 'rich_text' in block[block_type]:
-                for text in block[block_type]['rich_text']:
-                    content.append(text['text']['content'])
+        # Find the selected article ID
+        for choice in choices:
+            if choice["name"] == answer:
+                return choice["value"]
 
-        combined_content = ' '.join(content)
+    def retrieve_block(self, block_id):
+        return self.notion.blocks.retrieve(block_id)
 
-        return combined_content
+    def retrieve_block_children(self, block_id):
+        return self.notion.blocks.children.list(block_id)
+
+    def parse_block(self, block):
+        content = ""
+        block_type = block['type']
+
+        if block_type == 'paragraph':
+            content += self.format_rich_text(block['paragraph']['rich_text']) + "\n\n"
+
+        elif block_type == 'heading_1':
+            content += "# " + self.format_rich_text(block['heading_1']['rich_text']) + "\n\n"
+
+        elif block_type == 'heading_2':
+            content += "## " + self.format_rich_text(block['heading_2']['rich_text']) + "\n\n"
+
+        elif block_type == 'heading_3':
+            content += "### " + self.format_rich_text(block['heading_3']['rich_text']) + "\n\n"
+
+        elif block_type == 'bulleted_list_item':
+            content += "- " + self.format_rich_text(block['bulleted_list_item']['rich_text']) + "\n"
+
+        elif block_type == 'numbered_list_item':
+            content += "1. " + self.format_rich_text(block['numbered_list_item']['rich_text']) + "\n"
+
+        elif block_type == 'toggle':
+            content += "<details>\n<summary>" + self.format_rich_text(block['toggle']['rich_text']) + "</summary>\n"
+            if block['has_children']:
+                children_blocks = self.retrieve_block_children(block['id'])
+                for child_block in children_blocks['results']:
+                    content += self.parse_block(child_block)
+            content += "\n</details>\n"
+
+        # Add more block types as needed
+
+        if block['has_children'] and block_type not in ['toggle']:  # For blocks that aren't toggle
+            children_blocks = self.retrieve_block_children(block['id'])
+            for child_block in children_blocks['results']:
+                content += self.parse_block(child_block)
+
+        return content
+
+    def format_rich_text(self, rich_text):
+        text_content = ""
+        for text in rich_text:
+            annotations = text['annotations']
+            plain_text = text['plain_text']
+
+            if annotations['bold']:
+                plain_text = f"**{plain_text}**"
+            if annotations['italic']:
+                plain_text = f"*{plain_text}*"
+            if annotations['strikethrough']:
+                plain_text = f"~~{plain_text}~~"
+            if annotations['underline']:
+                plain_text = f"<u>{plain_text}</u>"
+            if annotations['code']:
+                plain_text = f"`{plain_text}`"
+
+            text_content += plain_text
+        return text_content
+
+    def get_article_content(self, page_id):
+        response = self.notion.blocks.children.list(page_id)
+        content = ""
+        for block in response['results']:
+            content += self.parse_block(block)
+        return content
 
 

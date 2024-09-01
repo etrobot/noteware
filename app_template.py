@@ -11,6 +11,12 @@ class tools():
     def __init__(self):
         self.llm = ChatOpenAI(model=os.getenv("MODEL"), api_key=os.getenv("LLM_KEY"), base_url=os.getenv("LLM_BASE"))
 
+    def extract_and_replace_links(self,text:str)->dict:
+        url_pattern = r'(https?://[^\s]+|www\.[^\s]+)'
+        links = re.findall(url_pattern, text)
+        for i, link in enumerate(links):
+            text = text.replace(link, f'[link{i + 1}]')
+        return {'links': links, 'text': text}
     def linkReader(self, url:str) -> str:
         image_extensions = r'\.(jpg|jpeg|png|gif|bmp|svg|webp)$'
         if re.search(image_extensions, url, re.IGNORECASE):
@@ -27,28 +33,33 @@ class tools():
         result = self.llm.invoke(content).content
         return result
 class GraphState(TypedDict):
-    target: str
+    mission: str
     next : str
     generation : str
 
 def run(user_input:str,tools:tools) -> str:
     def entry_node(state: GraphState):
-        search_result = tools.serp(state["target"])
-        result_text = '\n'.join([x['body'] for x in search_result])
-        return {"generation": result_text, "next": "process", "target": state["target"]}
+        etracted = tools.extract_and_replace_links(state["mission"])
+        if len(etracted['links']) > 0:
+            generation = tools.linkReader(etracted['links'][0])
+        else:
+            search_result = tools.serp(etracted['links'][0])
+            generation = '\n'.join([x['body'] for x in search_result])
+        return {"generation": generation, "next": "process", "mission": etracted['text']}
 
     def process_node(state: GraphState):
         result = tools.summarize(state["generation"])
-        return {"generation": result, "next": "think", "target": state["target"]}
+        return {"generation": result, "next": "think", "mission": state["mission"]}
 
     def think_node(state: GraphState):
-        think_result = tools.llm.invoke('data:' + state["generation"] + 'Target:' + state[
-            "target"] + "\nThink: if the data can fit the target, output 'yes', otherwise make new keyworks output begin with 'Should search with:'.").content
+        # this node is a conditional node that will return different states
+        think_result = tools.llm.invoke('data:' + state["generation"] + 'mission:' + state[
+            "mission"] + "\nThink: if the data can fit the mission, output 'yes', otherwise make new keyworks output begin with 'Should search with:'.").content
         if 'Should search with:' not in think_result:
-            return {"generation": state["generation"], "next": END, "target": state["target"]}
+            return {"generation": state["generation"], "next": END, "mission": state["mission"]}
         else:
             return {"generation": think_result.split('Should search with:')[1], "next": "entry",
-                    "target": state["target"]}
+                    "mission": state["mission"]}
 
     def conditional_edge(state: GraphState):
         return state['next']
@@ -57,16 +68,16 @@ def run(user_input:str,tools:tools) -> str:
 
     workflow.add_node("entry", entry_node)
     workflow.add_node("process", process_node)
-    workflow.add_node("think", think_node)  # think is a conditional node
+    workflow.add_node("think", think_node)
 
     workflow.set_entry_point("entry")
     workflow.add_edge("entry", "process")
     workflow.add_edge("process", "think")
-    workflow.add_conditional_edges("think", conditional_edge)  # conditional node must add conditional edge
+    workflow.add_conditional_edges("think", conditional_edge)  #only conditional node requires adding conditional edge
 
     app = workflow.compile()
-    final_state = app.invoke({"next": "entry", "target": user_input},{"recursion_limit": 10}, debug=True)
-    NotionMarkdownManager(os.environ["NOTION_TOKEN"], os.environ["NOTION_DB_ID"]).insert_markdown_to_notion(
+    final_state = app.invoke({"next": "entry", "mission": user_input},{"recursion_limit": 10}, debug=True)
+    NotionMarkdownManager(os.getenv("NOTION_TOKEN"), os.getenv("NOTION_DB_ID")).insert_markdown_to_notion(
         final_state["generation"], user_input)
 
-run(input("Enter question: "),tools())
+run(input("misson: "),tools())# change input to directly pass a mission
