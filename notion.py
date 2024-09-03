@@ -7,7 +7,7 @@ class NotionMarkdownManager:
         self.notion = Client(auth=api_key)
         self.database_id = database_id
 
-    def list_template_articles(self):
+    def list_mission_articles(self):
         response = self.notion.databases.query(
             **{
                 "database_id": self.database_id,
@@ -232,12 +232,12 @@ class NotionMarkdownManager:
 
     def insert_markdown_to_notion(self, md_text,title=None):
         blocks = []
+        if len(md_text) > 100:
+            blocks = self.markdown_to_notion_blocks(md_text)
         if title is None:
             title = md_text[:60]
-            if len(md_text) > 100:
-                blocks = self.markdown_to_notion_blocks(md_text)
-        if len(blocks) > 0 and 'heading_1' in blocks[0]:
-            title = blocks[0]['heading_1']['rich_text'][0]['text']['content']
+            if len(blocks) > 0 and 'heading_1' in blocks[0]:
+                title = blocks[0]['heading_1']['rich_text'][0]['text']['content']
         response = self.notion.pages.create(
             parent={"database_id": self.database_id},
             properties={
@@ -259,3 +259,47 @@ class NotionMarkdownManager:
             children=blocks
         )
         return response['id']
+
+    def update_markdown_to_notion(self, page_id, md_text, title=None):
+        blocks = []
+        if len(md_text) > 100:
+            blocks = self.markdown_to_notion_blocks(md_text)
+            if title is None:
+                title = md_text[:60]
+                if len(blocks) > 0 and 'heading_1' in blocks[0]:
+                    title = blocks[0]['heading_1']['rich_text'][0]['text']['content']
+
+
+        # 更新页面标题
+        self.notion.pages.update(
+            page_id=page_id,
+            properties={
+                "Name": {
+                    "title": [
+                        {
+                            "text": {
+                                "content": title
+                            }
+                        }
+                    ]
+                },
+                "Status": {
+                    "status": {
+                        "name": "Draft"
+                    }
+                }
+            }
+        )
+
+        # 清空旧的内容并插入新的内容
+        self.clear_notion_page_content(page_id)
+        self.notion.blocks.children.append(
+            block_id=page_id,
+            children=blocks
+        )
+
+    def clear_notion_page_content(self, page_id):
+        # 获取页面的现有内容块并逐一删除
+        blocks = self.notion.blocks.children.list(block_id=page_id).get('results')
+        for block in blocks:
+            self.notion.blocks.delete(block_id=block['id'])

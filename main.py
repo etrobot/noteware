@@ -34,8 +34,8 @@ def read_and_execute_app():
 
     try:
         manager = NotionMarkdownManager(os.getenv("NOTION_TOKEN"), os.getenv("NOTION_DB_ID"))
-        template_articles = manager.list_template_articles()
-        selected_article_id = manager.display_article_menu(template_articles)
+        mission_articles = manager.list_mission_articles()
+        selected_article_id = manager.display_article_menu(mission_articles)
         logger.info(selected_article_id)
         if selected_article_id:
             notion_content = manager.get_article_content(selected_article_id)
