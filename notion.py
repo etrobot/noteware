@@ -186,7 +186,6 @@ class NotionMarkdownManager:
             }
 
         def parse_paragraph(text):
-            # 使用正则表达式查找所有的 [text](url) 形式的字符串
             pattern = re.compile(r'\[([^\]]+)\]\((http[^\)]+)\)')
 
             rich_text = []
@@ -195,15 +194,12 @@ class NotionMarkdownManager:
             for match in pattern.finditer(text):
                 start, end = match.span()
                 if start > last_end:
-                    # 处理普通文本部分
                     rich_text.append({"type": "text", "text": {"content": text[last_end:start]}})
-                # 处理超链接部分
                 link_text, link_url = match.groups()
                 rich_text.append(create_link(link_text, link_url))
                 last_end = end
 
             if last_end < len(text):
-                # 处理剩余的普通文本部分
                 rich_text.append({"type": "text", "text": {"content": text[last_end:]}})
 
             return {"object": "block", "type": "paragraph", "paragraph": {"rich_text": rich_text}}
@@ -270,7 +266,6 @@ class NotionMarkdownManager:
                     title = blocks[0]['heading_1']['rich_text'][0]['text']['content']
 
 
-        # 更新页面标题
         self.notion.pages.update(
             page_id=page_id,
             properties={
@@ -291,7 +286,6 @@ class NotionMarkdownManager:
             }
         )
 
-        # 清空旧的内容并插入新的内容
         self.clear_notion_page_content(page_id)
         self.notion.blocks.children.append(
             block_id=page_id,
@@ -299,7 +293,6 @@ class NotionMarkdownManager:
         )
 
     def clear_notion_page_content(self, page_id):
-        # 获取页面的现有内容块并逐一删除
         blocks = self.notion.blocks.children.list(block_id=page_id).get('results')
         for block in blocks:
             self.notion.blocks.delete(block_id=block['id'])

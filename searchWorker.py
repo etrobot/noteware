@@ -6,11 +6,11 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s')
 
 class ColoredFormatter(logging.Formatter):
     COLORS = {
-        'DEBUG': '\033[94m',  # 蓝色
-        'INFO': '\033[92m',   # 绿色
-        'WARNING': '\033[93m', # 黄色
-        'ERROR': '\033[91m',   # 红色
-        'CRITICAL': '\033[95m' # 粉色
+        'DEBUG': '\033[94m',  # blue
+        'INFO': '\033[92m',   # green
+        'WARNING': '\033[93m', # yellow
+        'ERROR': '\033[91m',   # red
+        'CRITICAL': '\033[95m' # pink
     }
     RESET = '\033[0m'
 
@@ -19,12 +19,10 @@ class ColoredFormatter(logging.Formatter):
         message = super().format(record)
         return f"{color}{message}{self.RESET}"
 
-# 为 handler 设置彩色格式
 handler = logging.StreamHandler()
 handler.setFormatter(ColoredFormatter())
 logging.getLogger().addHandler(handler)
 
-# API endpoint URL
 url = os.getenv("MINDSEARCH")
 
 manager = NotionMarkdownManager(os.getenv("NOTION_TOKEN"), os.getenv("NOTION_DB_ID_SW"))
